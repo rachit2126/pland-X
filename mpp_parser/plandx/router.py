@@ -12,7 +12,11 @@ from .repository import programme_service
 
 logger = logging.getLogger(__name__)
 
-plandx_router = APIRouter(prefix="/api/v1/projects", tags=["PlanD-X Integration (Future)"])
+plandx_router = APIRouter(
+    prefix="/api/v1/projects",
+    tags=["Future Extensions"],
+    include_in_schema=False,
+)
 
 
 @plandx_router.get(

@@ -33,15 +33,15 @@ logger = setup_logging()
 openapi_tags = [
     {
         "name": "Core MPP Parser",
-        "description": "Primary prototype endpoints for importing Microsoft Project (.MPP) files, task modifications, and schedule export.",
+        "description": "Primary production endpoints for importing Microsoft Project (.MPP) files, modifying tasks, and schedule export.",
     },
     {
         "name": "Enterprise Operations",
         "description": "Observability and Prometheus telemetry metrics for enterprise monitoring.",
     },
     {
-        "name": "PlanD-X Integration (Future)",
-        "description": "Future extension modules for PlanD-X construction programme management platform integration.",
+        "name": "Future Extensions",
+        "description": "PlanD-X Integration Layer prepared as a future construction programme management extension.",
     },
 ]
 
@@ -50,7 +50,7 @@ app = FastAPI(
     description=(
         "Prototype service for importing Microsoft Project files, extracting programme data, modifying tasks, "
         "and exporting validated project schedules.\n\n"
-        "**Note**: Enterprise monitoring and PlanD-X integration capabilities are available as future extension modules."
+        "**Note**: PlanD-X Integration Layer prepared as a future construction programme management extension."
     ),
     version="1.1.0",
     openapi_tags=openapi_tags,

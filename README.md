@@ -1,190 +1,141 @@
-# Standalone MPP Import & Export Parser Service (PlanD-X Integration Layer)
+# Standalone MPP Import & Export Parser Prototype
 
-A high-performance, enterprise-grade Python service and CLI tool that parses Microsoft Project (`.MPP`) files, extracts structured programme information, supports task modification & MSPDI XML export, and exposes a normalized **PlanD-X Integration Layer** connecting programme data to construction management modules (Schedule, BOQ, Cost, Progress, Evidence, Vendor, Dashboard).
+A high-performance, prototype service and CLI tool that parses Microsoft Project (`.MPP`) files, extracts structured programme information according to a strict JSON contract, supports task modification & MSPDI XML export, and provides a foundation for future construction management extensions.
 
 Powered by [MPXJ](https://www.mpxj.org/) and JPype, this service handles real-world complex construction programmes across various Microsoft Project file formats (`.mpp`, `.xml`, `.mpx`, `.mpt`).
 
+> **Note**: PlanD-X Integration Layer prepared as a future construction programme management extension.
+
 ---
 
-## Unified PlanD-X Platform Architecture
+## 1. Current Prototype Capabilities
+
+### Overview & Primary Demo Flow
 
 ```
 Microsoft Project (.MPP)
          │
-         ▼ (MPXJ Engine)
-  Standalone MPP Parser Service
+         ▼ (MPXJ UniversalProjectReader)
+  Python Engine
          │
-         ▼ (MPPParseResultSchema)
-  PlanD-X Mapper Engine (mpp_parser/plandx/mapper.py)
+         ├──► GET  /api/v1/health   (Health Status)
+         ├──► POST /api/v1/parse    (Extract Programme JSON)
+         ├──► POST /api/v1/export   (Modify & Export Schedule)
+         └──► GET  /api/v1/metrics  (Prometheus Telemetry)
          │
-         ▼
-  Normalized PlanD-X Programme Models (mpp_parser/plandx/models.py)
-  ┌────────────────────────────────────────────────────────────────────────┐
-  │ Project  │  Activity  │  Dependency  │  Resource  │  BOQ  │  Progress │
-  └────────────────────────────────────────────────────────────────────────┘
-         │
-         ▼
-  Programme Service & Repository Layer (mpp_parser/plandx/repository.py)
-         │
-         ├──► GET  /api/v1/projects/{id}/programme (Normalized Programme DTO)
-         ├──► POST /api/v1/projects/{id}/sync      (Sync MPP dataset to PlanD-X)
-         └──► GET  /api/v1/projects/{id}/dashboard  (Dashboard Telemetry)
+         ▼ (MPXJ MSPDIWriter)
+   MSPDI XML Output (.xml) ──► Native MS Project Support
 ```
 
----
+### Core Features
 
-## PlanD-X Integration Modules & Strategy
+- **Project Metadata Extraction**: `sourceFile`, `projectName`, `projectCalendar`, `parsedAt`, `projectStart`, `projectFinish`, `taskCount`.
+- **Task Hierarchy & WBS**: Preserves standard MS Project hierarchy via `outlineLevel`, `parentId`, and WBS breakdown codes.
+- **Dependency Links**: Captures `FS`, `SS`, `FF`, `SF` relationships along with `lagDays`.
+- **Task Modification & Export Engine**: Modify task properties (name, duration, start/finish dates, percent complete, predecessors) and export updated schedules to MS Project-compatible **MSPDI XML** format (`.xml`).
+- **Export Verification**: Validates re-imported schedule integrity (`exportFormat`, `exportVerified`, `tasksChecked`, `hierarchyPreserved`, `dependenciesPreserved`, `milestonesPreserved`).
+- **Enterprise Operations & Security**: Request correlation IDs (`X-Request-ID`), Prometheus telemetry (`/api/v1/metrics`), 50 MB upload file size caps (`HTTP 413`), MIME type checks (`HTTP 422`), and Docker containerization.
 
-| Module | Integration Capability | Mapping Description |
-| :--- | :--- | :--- |
-| **Schedule Control** | Activity Hierarchy & Dependencies | Maps WBS, `outlineLevel`, `parentActivity`, and predecessor relationships (`FS`, `SS`, `FF`, `SF`). |
-| **BOQ & Cost** | Quantity & Cost Reference Mapping | Binds `BOQMapping` references (`boqItemId`, `code`, `quantity`, `unit`, `costEstimate`) to schedule activities. |
-| **Progress & Variance** | Schedule Variance Engine | Calculates baseline `plannedPercent` vs site `actualPercent`, schedule `variance`, `isDelayed` flags, and `delayDays`. |
-| **Evidence Management** | Verification Audit Trail | Binds `EvidenceRecord` attachments (site photos, inspection documents, reports) to activity IDs. |
-| **Vendor & Contractor** | Subcontractor Mapping | Maps assigned resources containing contractor terms to `VendorMapping` (subcontract company, package name). |
-| **Programme Dashboard** | Telemetry Aggregation | Aggregates overall progress %, completed activities, delayed tasks, critical path activities, and upcoming milestones. |
+### Primary API Endpoints
 
----
-
-## Output PlanD-X Programme Schema Contract
-
-```json
-{
-  "projectId": "proj-123",
-  "projectName": "Ormiston Construction Phase 2",
-  "startDate": "2026-01-01",
-  "finishDate": "2026-12-31",
-  "calendar": "Standard",
-  "syncedAt": "2026-08-14T03:45:00Z",
-  "activities": [
-    {
-      "activityId": "10",
-      "WBS": "1.1",
-      "name": "Substructure Concrete Pour",
-      "parentActivity": "1",
-      "startDate": "2026-01-01",
-      "finishDate": "2026-01-10",
-      "duration": 10.0,
-      "progressPercentage": 50.0,
-      "milestone": false,
-      "isSummary": false,
-      "dependencies": [
-        {
-          "predecessor": "9",
-          "successor": "10",
-          "relationshipType": "FS",
-          "lag": 0.0
-        }
-      ],
-      "resources": [
-        {
-          "resourceId": "res-10-1",
-          "resourceName": "ABC Concrete Contractor",
-          "resourceType": "Subcontractor"
-        }
-      ],
-      "boqMapping": {
-        "boqItemId": "boq-10",
-        "code": "COST-10",
-        "quantity": 1.0,
-        "unit": "ls",
-        "costEstimate": 100000.0
-      },
-      "evidenceRecords": [],
-      "vendorMapping": {
-        "vendorId": "v-123",
-        "companyName": "ABC Concrete Contractor",
-        "package": "Substructure Concrete Pour",
-        "assignedActivities": ["10"]
-      },
-      "progressMetric": {
-        "plannedPercent": 100.0,
-        "actualPercent": 50.0,
-        "variance": -50.0,
-        "isDelayed": true,
-        "delayDays": 5.0
-      }
-    }
-  ]
-}
-```
-
----
-
-## Integration API Endpoints
-
-1. **Sync MPP File into PlanD-X Project (`POST /api/v1/projects/{id}/sync`)**
+1. **Health Check (`GET /api/v1/health`)**
    ```bash
-   curl -X POST "http://127.0.0.1:8000/api/v1/projects/proj-123/sync" \
+   curl http://127.0.0.1:8000/api/v1/health
+   ```
+
+2. **Parse MPP File (`POST /api/v1/parse`)**
+   ```bash
+   curl -X POST "http://127.0.0.1:8000/api/v1/parse" \
      -F "file=@project.mpp"
    ```
-   **Response**:
-   ```json
-   {
-     "projectId": "proj-123",
-     "syncStatus": "success",
-     "activitiesImported": 800,
-     "warnings": []
-   }
+
+3. **Modify & Export Schedule (`POST /api/v1/export`)**
+   ```bash
+   curl -X POST "http://127.0.0.1:8000/api/v1/export" \
+     -F "file=@project.mpp" \
+     -F 'modifications_json=[{"taskId": "25", "name": "Updated Activity", "percentComplete": 75}]'
    ```
 
-2. **Get Normalized PlanD-X Programme (`GET /api/v1/projects/{id}/programme`)**
+4. **Prometheus Telemetry (`GET /api/v1/metrics`)**
    ```bash
-   curl http://127.0.0.1:8000/api/v1/projects/proj-123/programme
+   curl http://127.0.0.1:8000/api/v1/metrics
    ```
 
-3. **Get Programme Dashboard Telemetry (`GET /api/v1/projects/{id}/dashboard`)**
-   ```bash
-   curl http://127.0.0.1:8000/api/v1/projects/proj-123/dashboard
-   ```
-   **Response**:
-   ```json
-   {
-     "progress": 65.0,
-     "completedActivities": 450,
-     "delayedActivities": 12,
-     "criticalActivities": 5,
-     "upcomingMilestones": 8,
-     "totalActivities": 800
-   }
-   ```
+### Command Line Interface (CLI)
+
+```bash
+# Parse MPP file to formatted JSON
+mpp-parse project.mpp --pretty -o output.json
+
+# Modify & Export project schedule
+mpp-export project.mpp output.xml --modify modifications.json
+```
 
 ---
 
-## Standalone Parser & Exporter Usage
+## 2. Future PlanD-X Integration Roadmap
 
-### HTTP Endpoints
-- `GET /health` / `GET /api/v1/health`: Health check status.
-- `POST /parse` / `POST /api/v1/parse`: Multipart MPP upload parsing.
-- `POST /export` / `POST /api/v1/export`: Task modification and MSPDI XML export.
-- `GET /metrics` / `GET /api/v1/metrics`: Prometheus telemetry exposition.
+The service includes an internal **PlanD-X Integration Layer** prepared for connecting parsed programme data to future construction management modules:
 
-### CLI Utilities
-```bash
-# Parse MPP to JSON
-mpp-parse project.mpp --pretty -o output.json
-
-# Modify & Export Project
-mpp-export project.mpp output.xml --modify modifications.json
 ```
+                          Parsed MPP Dataset
+                                  │
+                                  ▼
+                 Normalized PlanD-X Programme Models
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ Project │ Activity │ Dependency │ Resource │ BOQ │ Progress │
+  └──────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+                    PlanD-X Module Integrations
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ Schedule │ BOQ & Cost │ Progress │ Evidence │ Vendor │ Dashboard │
+  └──────────────────────────────────────────────────────────────────┘
+```
+
+### Module Integration Architecture
+
+- **Schedule Control**: Maps activity WBS, parent-child groups, and predecessor links.
+- **BOQ & Cost**: Links pay item codes (`BOQMapping`), quantities, and budget estimates to schedule activities.
+- **Progress Variance**: Baseline `plannedPercent` vs site `actualPercent` variance calculations and delay tracking.
+- **Evidence Management**: Binds site photos, inspection documents, and verification records to activity IDs.
+- **Vendor Mapping**: Binds subcontractor company IDs and packages to assigned activities.
+- **Programme Dashboard**: Exposes summary metrics (`progress %`, completed tasks, delayed activities, critical tasks, upcoming milestones).
+
+### Internal PlanD-X Endpoints (Prepared Extension)
+
+- `GET /api/v1/projects/{project_id}/programme` (Normalized Programme DTO)
+- `POST /api/v1/projects/{project_id}/sync` (Sync MPP dataset to PlanD-X)
+- `GET /api/v1/projects/{project_id}/dashboard` (Dashboard Telemetry)
+
+---
+
+## Prerequisites & Installation
+
+1. **Python 3.9+** & **Java Runtime (JRE / JDK 11+)**
+2. **Setup**:
+   ```bash
+   pip install -r requirements.txt
+   pip install -e .
+   ```
 
 ---
 
 ## Running Automated Tests
 
 ```bash
-# Run full pytest test suite across all 10 test modules
+# Run full pytest suite across all 10 test modules
 pytest -v
 ```
 
-The test suite validates:
+Tests validate:
 1. `tests/test_parse.py`: Flat, hierarchy, and real 800-task MPP file parsing.
-2. `tests/test_engine.py`: Engine helper and error handling unit tests.
-3. `tests/test_schema.py`: Pydantic contract & alias validation tests.
+2. `tests/test_engine.py`: Engine helper unit tests.
+3. `tests/test_schema.py`: Schema contract validation tests.
 4. `tests/test_api.py`: FastAPI endpoint tests.
-5. `tests/test_export.py`: Task modification & predecessor modification export tests.
+5. `tests/test_export.py`: Task modification & export verification tests.
 6. `tests/test_cli.py`: CLI commands `mpp-parse` and `mpp-export`.
-7. `tests/test_production_hardening.py`: Size caps (HTTP 413), extension checks (HTTP 422), config settings.
-8. `tests/test_performance.py`: Scale benchmarks (100, 5,000, 25,000 tasks), memory usage, duration metrics.
-9. `tests/test_enterprise.py`: Correlation ID middleware, Prometheus telemetry, MIME validation, filename sanitization, API v1 routes.
-10. `tests/test_plandx_integration.py`: PlanD-X DTO schema validation, mapper engine, progress variance calculations, repository service, and `/api/v1/projects/{id}/sync`, `/programme`, `/dashboard` endpoints.
+7. `tests/test_production_hardening.py`: Size caps (HTTP 413) and extension checks.
+8. `tests/test_performance.py`: Scale benchmarks (100, 5,000, 25,000 tasks).
+9. `tests/test_enterprise.py`: Correlation ID middleware, Prometheus telemetry, MIME validation.
+10. `tests/test_plandx_integration.py`: PlanD-X DTO models, mapper engine, progress variance, and endpoints.
