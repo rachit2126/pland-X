@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mpp-parser"
+version = "1.0.0"
+description = "Standalone Python MPP Import Parser Service & CLI using MPXJ"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "mpxj>=16.0.0",
+    "jpype1>=1.5.0",
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+    "python-multipart>=0.0.6"
+]
+
+[project.scripts]
+mpp-parse = "mpp_parser.cli:main"
+mpp-export = "mpp_parser.cli:main_export"

@@ -1,0 +1,25 @@
+name: Docker Build & Health Check
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build -t mpp-parser-service:latest .
+
+      - name: Run Container & Test Healthcheck
+        run: |
+          docker run -d -p 8000:8000 --name mpp-parser-test mpp-parser-service:latest
+          sleep 5
+          curl -f http://localhost:8000/api/v1/health
+          docker stop mpp-parser-test
