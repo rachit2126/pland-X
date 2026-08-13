@@ -30,10 +30,30 @@ from .schema import (
 
 logger = setup_logging()
 
+openapi_tags = [
+    {
+        "name": "Core MPP Parser",
+        "description": "Primary prototype endpoints for importing Microsoft Project (.MPP) files, task modifications, and schedule export.",
+    },
+    {
+        "name": "Enterprise Operations",
+        "description": "Observability and Prometheus telemetry metrics for enterprise monitoring.",
+    },
+    {
+        "name": "PlanD-X Integration (Future)",
+        "description": "Future extension modules for PlanD-X construction programme management platform integration.",
+    },
+]
+
 app = FastAPI(
-    title="MPP Import Parser Service",
-    description="Standalone Python Service parsing Microsoft Project (.MPP) files to structured JSON and exporting updated programmes.",
+    title="Standalone MPP Import & Export Parser Prototype",
+    description=(
+        "Prototype service for importing Microsoft Project files, extracting programme data, modifying tasks, "
+        "and exporting validated project schedules.\n\n"
+        "**Note**: Enterprise monitoring and PlanD-X integration capabilities are available as future extension modules."
+    ),
     version="1.1.0",
+    openapi_tags=openapi_tags,
 )
 
 app.add_middleware(CorrelationIdMiddleware)
@@ -86,14 +106,14 @@ async def _read_file_contents_safely(file: UploadFile):
     return bytes(contents), None
 
 
-@v1_router.get("/health")
+@v1_router.get("/health", tags=["Core MPP Parser"])
 @app.get("/health", include_in_schema=False)
 def health_check():
     """Health check endpoint."""
     return {"status": "ok", "service": "mpp-parser-service", "version": "1.1.0"}
 
 
-@v1_router.get("/metrics")
+@v1_router.get("/metrics", tags=["Enterprise Operations"])
 @app.get("/metrics", include_in_schema=False)
 def metrics_endpoint():
     """Exposes Prometheus telemetry metrics."""
@@ -105,6 +125,7 @@ EXAMPLE_MODIFICATIONS = '[\n  {\n    "taskId": "25",\n    "name": "Updated Task"
 
 @v1_router.post(
     "/parse",
+    tags=["Core MPP Parser"],
     response_model=MPPParseResultSchema,
     responses={
         200: {"description": "Successfully parsed MPP file", "model": MPPParseResultSchema},
@@ -184,6 +205,7 @@ async def parse_mpp(file: UploadFile = File(...)):
 
 @v1_router.post(
     "/export",
+    tags=["Core MPP Parser"],
     response_model=MPPParseResultSchema,
     responses={
         200: {"description": "Successfully modified and exported project file", "model": MPPParseResultSchema},
