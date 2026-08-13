@@ -9,6 +9,9 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_MIME_TYPES: Set[str] = {
     "application/vnd.ms-project",
+    "application/mpp",
+    "application/x-mpp",
+    "application/x-ms-project",
     "application/msprops",
     "application/x-project",
     "application/xml",
