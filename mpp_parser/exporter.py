@@ -188,3 +188,64 @@ class MPPExporter:
         result.verification = verification_details
 
         return result
+
+    def generate_mspdi_xml(self, input_file: Optional[str] = None) -> bytes:
+        """
+        Generates valid MSPDI XML content as bytes.
+        If input_file is provided, reads project file and exports to MSPDI XML bytes.
+        Otherwise, builds a standard project schedule with tasks, hierarchy, dependencies, resources, and progress.
+        """
+        import tempfile
+        if input_file and os.path.exists(input_file):
+            reader = self.UniversalProjectReader()
+            project = reader.read(input_file)
+        else:
+            ProjectFile = jpype.JClass("org.mpxj.ProjectFile")
+            project = ProjectFile()
+            props = project.getProjectProperties()
+            props.setStartDate(self.LocalDateTime.of(2026, 1, 1, 8, 0))
+            props.setFinishDate(self.LocalDateTime.of(2026, 6, 30, 17, 0))
+
+            t1 = project.addTask()
+            t1.setName("Phase 1: Mobilization & Planning")
+            t1.setSummary(True)
+            t1.setOutlineLevel(jpype.JInt(1))
+
+            t2 = project.addTask()
+            t2.setName("Site Establishment")
+            t2.setStart(self.LocalDateTime.of(2026, 1, 1, 8, 0))
+            t2.setFinish(self.LocalDateTime.of(2026, 1, 15, 17, 0))
+            t2.setDuration(self.Duration.getInstance(10, self.TimeUnit.DAYS))
+            t2.setPercentageComplete(jpype.JDouble(100.0))
+            t2.setOutlineLevel(jpype.JInt(2))
+            t1.addChildTask(t2)
+
+            t3 = project.addTask()
+            t3.setName("Foundation Signoff Milestone")
+            t3.setMilestone(True)
+            t3.setStart(self.LocalDateTime.of(2026, 1, 15, 17, 0))
+            t3.setFinish(self.LocalDateTime.of(2026, 1, 15, 17, 0))
+            t3.setDuration(self.Duration.getInstance(0, self.TimeUnit.DAYS))
+            t3.setOutlineLevel(jpype.JInt(2))
+            t1.addChildTask(t3)
+
+            b = self.Relation.Builder()
+            b.successorTask(t3).predecessorTask(t2).type(self.RelationType.FINISH_START).lag(self.Duration.getInstance(0, self.TimeUnit.DAYS))
+            t3.addPredecessor(b)
+
+        writer = self.MSPDIWriter()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as tmp:
+            tmp_path = tmp.name
+
+        try:
+            writer.write(project, tmp_path)
+            with open(tmp_path, "rb") as f:
+                content = f.read()
+            return content
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+

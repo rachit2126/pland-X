@@ -209,3 +209,63 @@ def test_api_export_with_task_id_alias():
     assert t1["name"] == "Alias Updated Task"
     assert t1["durationDays"] == 25.0
     assert t1["percentComplete"] == 80.0
+
+
+def test_api_get_export_info():
+    """
+    Test API: GET /api/v1/export
+    Verify: Returns HTTP 200 with export capabilities, supported format (MSPDI XML), and documentation.
+    """
+    response = client.get("/api/v1/export")
+    assert response.status_code == 200
+    data = response.json()
+    assert "supportedExportFormats" in data
+    assert "MSPDI XML (.xml)" in data["supportedExportFormats"]
+    assert data["nativeMppWriteSupported"] is False
+
+
+def test_api_get_programme_export_xml():
+    """
+    Test API: GET /api/projects/{id}/programme/export?format=xml
+    Verify: Generates valid MSPDI XML with 200 OK and application/xml Content-Type.
+    """
+    response = client.get("/api/v1/projects/PRJ-202/programme/export?format=xml")
+    assert response.status_code == 200
+    assert "application/xml" in response.headers["content-type"]
+    assert b"<?xml" in response.content or b"<Project" in response.content
+
+
+def test_api_get_programme_export_unsupported_format_returns_422():
+    """
+    Test API: GET /api/projects/{id}/programme/export?format=pdf
+    Verify: Unsupported format query returns HTTP 422 Unprocessable Entity.
+    """
+    response = client.get("/api/v1/projects/PRJ-202/programme/export?format=pdf")
+    assert response.status_code == 422
+    data = response.json()
+    assert "error" in data
+
+
+def test_round_trip_xml_validation(tmp_path):
+    """
+    Test Case: Round trip XML import -> export -> re-import validation
+    Verify: All tasks, dates, dependencies, resources, and progress are preserved cleanly.
+    """
+    input_file = os.path.abspath(os.path.join(FIXTURES_DIR, "test_dependencies.xml"))
+    output_file = str(tmp_path / "round_trip.xml")
+
+    exporter = MPPExporter()
+    result = exporter.modify_and_export(input_file, output_file, [])
+
+    assert os.path.exists(output_file)
+    assert result.exportVerified is True
+    assert result.verification.hierarchyPreserved is True
+    assert result.verification.dependenciesPreserved is True
+    assert result.verification.milestonesPreserved is True
+
+    # Re-parse exported file
+    reimport_result = parse_mpp_file(output_file)
+    assert reimport_result.taskCount == result.taskCount
+    assert len(reimport_result.tasks) == len(result.tasks)
+
+

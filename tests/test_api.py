@@ -54,3 +54,38 @@ def test_api_parse_corrupted_file_returns_422():
     data = response.json()
     assert "error" in data
     assert data["error"] == "Unable to parse MPP file"
+
+
+def test_api_import_programme_valid():
+    """Verify POST /api/v1/projects/{project_id}/programme/import returns 200 OK and projectId."""
+    flat_path = os.path.abspath(os.path.join(FIXTURES_DIR, "test_flat.xml"))
+    assert os.path.exists(flat_path)
+
+    with open(flat_path, "rb") as f:
+        response = client.post(
+            "/api/v1/projects/PRJ-101/programme/import",
+            files={"file": ("test_flat.xml", f, "application/octet-stream")}
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["projectId"] == "PRJ-101"
+    assert data["sourceFile"] == "test_flat.xml"
+    assert data["taskCount"] >= 2
+
+
+def test_api_import_programme_corrupted_returns_422():
+    """Verify POST /api/v1/projects/{project_id}/programme/import with corrupted file returns 422."""
+    corrupt_path = os.path.abspath(os.path.join(FIXTURES_DIR, "corrupted.mpp"))
+    assert os.path.exists(corrupt_path)
+
+    with open(corrupt_path, "rb") as f:
+        response = client.post(
+            "/api/v1/projects/PRJ-101/programme/import",
+            files={"file": ("corrupted.mpp", f, "application/octet-stream")}
+        )
+
+    assert response.status_code == 422
+    data = response.json()
+    assert "error" in data
+

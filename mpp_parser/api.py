@@ -3,7 +3,7 @@ import tempfile
 import time
 import json
 from typing import Optional, List
-from fastapi import FastAPI, APIRouter, UploadFile, File, Form, status
+from fastapi import FastAPI, APIRouter, UploadFile, File, Form, Response, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -39,18 +39,13 @@ openapi_tags = [
         "name": "Enterprise Operations",
         "description": "Observability and Prometheus telemetry metrics for enterprise monitoring.",
     },
-    {
-        "name": "Future Extensions",
-        "description": "PlanD-X Integration Layer prepared as a future construction programme management extension.",
-    },
 ]
 
 app = FastAPI(
-    title="Standalone MPP Import & Export Parser Prototype",
+    title="Standalone MPP Import & Export Parser",
     description=(
-        "Prototype service for importing Microsoft Project files, extracting programme data, modifying tasks, "
-        "and exporting validated project schedules.\n\n"
-        "**Note**: PlanD-X Integration Layer prepared as a future construction programme management extension."
+        "High-performance native parser service for Microsoft Project (.MPP) files, "
+        "extracting project metadata, task hierarchy, milestones, and predecessor relationships into structured JSON."
     ),
     version="1.1.0",
     openapi_tags=openapi_tags,
@@ -204,6 +199,99 @@ async def parse_mpp(file: UploadFile = File(...)):
 
 
 @v1_router.post(
+    "/projects/{project_id}/programme/import",
+    tags=["Core MPP Parser"],
+    response_model=MPPParseResultSchema,
+    responses={
+        200: {"description": "Successfully imported programme file", "model": MPPParseResultSchema},
+        413: {"description": "File payload exceeds max size limit", "model": ErrorResponseSchema},
+        422: {"description": "Corrupted or unparseable file", "model": ErrorResponseSchema},
+    },
+)
+@app.post("/api/projects/{project_id}/programme/import", response_model=MPPParseResultSchema, include_in_schema=False)
+async def import_programme(project_id: str, file: UploadFile = File(...)):
+    """
+    Accepts multipart/form-data (.MPP or .XML schedule upload) for project_id,
+    automatically detects file type, parses schedule, and returns structured import summary.
+    """
+    result = await parse_mpp(file=file)
+    if isinstance(result, JSONResponse):
+        return result
+    if hasattr(result, "projectId"):
+        result.projectId = project_id
+    return result
+
+
+@v1_router.get(
+    "/projects/{project_id}/programme/export",
+    tags=["Core MPP Parser"],
+)
+@app.get("/api/projects/{project_id}/programme/export", include_in_schema=False)
+def export_programme_xml(project_id: str, format: str = "xml"):
+    """
+    Generates and returns valid MSPDI XML schedule file preserving tasks, dates, dependencies, resources, and progress.
+    Returns HTTP 422 for unsupported export format queries.
+    """
+    fmt = (format or "xml").strip().lower()
+    if fmt != "xml":
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"error": f"Unsupported export format '{format}'. Supported format: xml"},
+        )
+
+    exporter = MPPExporter()
+    xml_bytes = exporter.generate_mspdi_xml()
+    return Response(
+        content=xml_bytes,
+        media_type="application/xml",
+        headers={"Content-Disposition": f"attachment; filename=project_{project_id}.xml"},
+    )
+
+
+@v1_router.get(
+    "/export",
+    tags=["Core MPP Parser"],
+)
+@app.get("/export", include_in_schema=False)
+def get_export_info(format: Optional[str] = None):
+    """
+    Returns export capability information, or generates valid MSPDI XML if format=xml query parameter is provided.
+    Supported export format: Microsoft Project XML (MSPDI XML .xml).
+    """
+    if format is not None:
+        fmt = str(format).strip().lower()
+        if fmt == "xml":
+            exporter = MPPExporter()
+            xml_bytes = exporter.generate_mspdi_xml()
+            return Response(
+                content=xml_bytes,
+                media_type="application/xml",
+                headers={"Content-Disposition": "attachment; filename=project_export.xml"},
+            )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={"error": f"Unsupported export format '{format}'. Supported format: xml"},
+            )
+
+    return {
+        "service": "Standalone MPP Import & Export Parser",
+        "supportedExportFormats": ["MSPDI XML (.xml)"],
+        "nativeMppWriteSupported": False,
+        "note": "MPXJ natively supports writing MSPDI XML format (.xml), which is fully compatible with Microsoft Project.",
+        "exportUsage": {
+            "method": "POST",
+            "endpoint": "/api/v1/export",
+            "contentType": "multipart/form-data",
+            "parameters": {
+                "file": "Required .mpp or .xml schedule file",
+                "modifications_json": "Optional JSON array of task modifications (name, durationDays, percentComplete, start, finish, predecessors)"
+            }
+        }
+    }
+
+
+@v1_router.post(
     "/export",
     tags=["Core MPP Parser"],
     response_model=MPPParseResultSchema,
@@ -329,11 +417,8 @@ async def export_mpp(
                     pass
 
 
-from .plandx.router import plandx_router
-
-# Include API v1 Router & PlanD-X Integration Router
+# Include API v1 Router
 app.include_router(v1_router)
-app.include_router(plandx_router)
 
 
 if __name__ == "__main__":

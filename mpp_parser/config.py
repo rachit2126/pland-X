@@ -8,7 +8,7 @@ class Settings:
     def __init__(self):
         self.MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
         
-        ext_env = os.getenv("ALLOWED_EXTENSIONS", ".mpp,.xml,.mpx,.mpt")
+        ext_env = os.getenv("ALLOWED_EXTENSIONS", ".mpp,.xml,.mspdi,.mpx,.mpt")
         self.ALLOWED_EXTENSIONS: Set[str] = {
             e.strip().lower() for e in ext_env.split(",") if e.strip()
         }

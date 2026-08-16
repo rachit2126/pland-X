@@ -5,7 +5,8 @@ from pydantic import BaseModel, Field, AliasChoices
 class PredecessorSchema(BaseModel):
     id: str = Field(..., description="Predecessor task ID")
     type: str = Field(..., description="Relationship type: FS, SS, FF, SF")
-    lagDays: float = Field(default=0.0, description="Lag days (can be positive or negative)")
+    lag: float = Field(default=0.0, description="Lag value in days")
+    lagDays: float = Field(default=0.0, description="Lag value in days (alias for lag)")
 
 
 class TaskSchema(BaseModel):
@@ -38,12 +39,13 @@ class VerificationDetailsSchema(BaseModel):
 
 
 class MPPParseResultSchema(BaseModel):
-    sourceFile: str = Field(..., description="Original file path or name")
+    projectId: Optional[str] = Field(default=None, description="Project ID if imported for specific project")
+    sourceFile: Optional[str] = Field(default=None, description="Original file path or name")
     projectName: Optional[str] = Field(default=None, description="Project name or title")
     projectCalendar: Optional[str] = Field(default="Standard", description="Default project calendar name")
-    parsedAt: str = Field(..., description="ISO 8601 timestamp of parsing")
     projectStart: Optional[str] = Field(default=None, description="Project start date YYYY-MM-DD")
     projectFinish: Optional[str] = Field(default=None, description="Project finish date YYYY-MM-DD")
+    parsedAt: str = Field(..., description="ISO 8601 timestamp of parsing")
     taskCount: int = Field(..., description="Total tasks extracted")
     tasks: List[TaskSchema] = Field(default_factory=list)
     unparsedWarnings: List[UnparsedWarningSchema] = Field(default_factory=list)
@@ -68,3 +70,4 @@ class TaskModificationSchema(BaseModel):
 
 class ExportRequestSchema(BaseModel):
     modifications: List[TaskModificationSchema] = Field(default_factory=list)
+

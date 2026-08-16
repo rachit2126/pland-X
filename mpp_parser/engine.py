@@ -111,6 +111,7 @@ class MPPParser:
                 unparsedWarnings=warnings,
             )
 
+        last_task_at_level = {}
         for i in range(mpxj_tasks.size()):
             t = mpxj_tasks.get(i)
             if t is None:
@@ -125,7 +126,7 @@ class MPPParser:
             wbs = str(t.getWBS()) if t.getWBS() is not None else None
             outline_level = int(t.getOutlineLevel()) if t.getOutlineLevel() is not None else 1
 
-            # Parent ID handling
+            # Parent ID handling (BAQ -> Task -> Sub-task hierarchy)
             parent_task = t.getParentTask()
             parent_id = None
             if parent_task is not None and parent_task.getID() is not None:
@@ -133,6 +134,12 @@ class MPPParser:
                 # If parent ID is 0 or outline level is 1, root tasks have parentId null
                 if pid != "0" and pid != task_id and outline_level > 1:
                     parent_id = pid
+            
+            # Fallback to level stack if parent task not directly provided
+            if parent_id is None and outline_level > 1:
+                parent_id = last_task_at_level.get(outline_level - 1)
+
+            last_task_at_level[outline_level] = task_id
 
             is_milestone = bool(t.getMilestone()) if t.getMilestone() is not None else False
             is_summary = bool(t.getSummary()) if t.getSummary() is not None else False
@@ -200,6 +207,7 @@ class MPPParser:
                             PredecessorSchema(
                                 id=pred_id,
                                 type=rel_type,
+                                lag=lag_days,
                                 lagDays=lag_days,
                             )
                         )
